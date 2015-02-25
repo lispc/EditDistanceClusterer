@@ -1,3 +1,4 @@
+package lispc;
 import java.lang.Math;
 import java.util.ArrayList;
 import java.util.List;
@@ -5,15 +6,27 @@ import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.Collections;
 import java.util.Set;
+import java.util.TreeSet;
+import java.util.HashSet;
+import java.util.Map;
+import java.util.Map.Entry;
 import java.io.File;
 import java.io.IOException;
+import java.io.Serializable;
 import org.apache.commons.io.FileUtils;
 import java.util.Comparator;
-class Joiner {
-	static private List<String> strings;
-	static private ArrayList<ArrayList<HashMap<String, ArrayList<Integer>>>> globalIndex = 
-		new ArrayList<ArrayList<HashMap<String, ArrayList<Integer>>>>();
+public class Joiner {
+	static private List<String> strings = new ArrayList<String>();
+	static private ArrayList<ArrayList<HashMap<String, ArrayList<Integer>>>> globalIndex =
+	    new ArrayList<ArrayList<HashMap<String, ArrayList<Integer>>>>();
 	static private int threshold;
+	static boolean inited = false;
+	static private int[][] distanceBuffer;
+	public static class SizeComparator implements Comparator<Set<Serializable>> {
+        public int compare(Set<Serializable> o1, Set<Serializable> o2) {
+            return o2.size() - o1.size();
+        }
+    }
 	public static class JoinResult {
 		public int srcId;
 		public int dstId;
@@ -57,13 +70,19 @@ class Joiner {
 			return 1;
 		}
 	}
-	static private int[][] distanceBuffer;
 	static public void Init() {
+		if (inited) {
+			return;
+		}
+		inited = true;
 		distanceBuffer = new int[1024][1024];
 		for (int i = 0; i < 1024; i++) {
 			distanceBuffer[0][i] = i;
 			distanceBuffer[i][0] = i;
 		}
+	}
+	static {
+		Init();
 	}
 	static public int EditDistance(String s1, String s2, int threshold) {
 		//System.out.println("dis "+s1+" "+s2+" "+threshold);
@@ -219,10 +238,59 @@ class Joiner {
 		//Collections.sort(result, new JoinComparator());
 		//result.erase( unique( result.begin(), result.end(), same), result.end() );
 	}
+	public static void populate(String s) {
+		strings.add(s);
+	}
+	public static List<Set<Serializable>> getClusters(int radius) {
+		threshold = radius;
+		Map<Serializable, Set<Serializable>> cluster_map = new HashMap<Serializable, Set<Serializable>>();
+		BuildIndex();
+		ArrayList<JoinResult> results = Join();
+		for (JoinResult item : results) {
+			String a = strings.get(item.srcId);
+			String b = strings.get(item.dstId);
+			if (a == b) continue;
+			if (cluster_map.containsKey(a) && cluster_map.get(a).contains(b)) continue;
+			if (cluster_map.containsKey(b) && cluster_map.get(b).contains(a)) continue;
+			Set<Serializable> l = null;
+			if (!cluster_map.containsKey(a)) {
+				l = new TreeSet<Serializable>();
+				l.add(a);
+				cluster_map.put(a, l);
+			} else {
+				l = cluster_map.get(a);
+			}
+			l.add(b);
+			Set<Serializable> l2 = null;
+			if (!cluster_map.containsKey(b)) {
+				l2 = new TreeSet<Serializable>();
+				l2.add(b);
+				cluster_map.put(b, l2);
+			} else {
+				l2 = cluster_map.get(b);
+			}
+			l2.add(a);
+		}
+
+
+		Set<Set<Serializable>> clusters = new HashSet<Set<Serializable>>();
+		for (Entry<Serializable, Set<Serializable>> e : cluster_map.entrySet()) {
+			Set<Serializable> v = e.getValue();
+			System.out.println(v.getClass().getName() + " : " + v.hashCode() + " vs " + System.identityHashCode(v));
+			if (v.size() > 1) {
+				clusters.add(v);
+			}
+		}
+		List<Set<Serializable>> sorted_clusters = new ArrayList<Set<Serializable>>(clusters);
+
+		Collections.sort(sorted_clusters, new SizeComparator());
+
+		return sorted_clusters;
+	}
 	public static void main (String[] args) {
-		Init();
+		//Init();
 		//System.out.println(EditDistance("_aal", "_aal", 2));
-		for(String s : args) {
+		for (String s : args) {
 			//System.out.println(s);
 		}
 		//System.out.println(new Joiner().EditDistance("abcd","bcde",5));
