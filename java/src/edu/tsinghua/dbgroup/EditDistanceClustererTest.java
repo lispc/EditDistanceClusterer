@@ -27,7 +27,7 @@ class EditDistanceClustererTest {
 		}
 		EditDistanceClusterer clusterer = new EditDistanceClusterer();
 		for(String s : strings){
-			System.out.println(s);
+			//System.out.println(s);
 			clusterer.Populate(s);
 		}
 		List<Set<Serializable>> results = clusterer.getClusters(threshold);
