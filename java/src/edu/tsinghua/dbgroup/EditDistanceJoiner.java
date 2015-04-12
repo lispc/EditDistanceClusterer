@@ -121,92 +121,98 @@ public class EditDistanceJoiner {
 		mThreshold = threshold;
 		buildIndex();
 		ArrayList<EditDistanceJoinResult> results = new ArrayList<EditDistanceJoinResult>();
-		int srcId = 0;
-		for (String src : mStrings) {
+		for (int srcId = 0; srcId < mStrings.size(); srcId++) {
 			ArrayList<UnfilteredResult> resultsBeforeRefining = new ArrayList<UnfilteredResult>();
-			int srcLen = src.length();
-			for (int dstLen = srcLen; dstLen <= Math.min(mGlobalIndex.size() - 1, srcLen + mThreshold); dstLen++) {
-				for (int gramNo = 0; gramNo <= mThreshold; gramNo++) {
-					int candidateGramPos = dstLen / (mThreshold + 1) * gramNo;
-					int candidateGramLen;
-					if (gramNo < dstLen % (mThreshold + 1)) {
-						candidateGramLen = dstLen / (mThreshold + 1) + 1;
-						candidateGramPos += gramNo;
-					} else {
-						candidateGramPos += dstLen % (mThreshold + 1);
-						candidateGramLen = dstLen / (mThreshold + 1);
-					}
-					int startPos = Math.max(candidateGramPos - mThreshold, 0);
-					int endPos = Math.min(candidateGramPos + mThreshold, srcLen - candidateGramLen);
-					for (; startPos <= endPos; startPos++) {
-						String gram = src.substring(startPos, startPos + candidateGramLen);
-						ArrayList<Integer> invertedList = mGlobalIndex.get(dstLen).get(gramNo).get(gram);
-						if (invertedList != null) {
-							for (int k = 0; k < invertedList.size(); k++) {
-								int dstId = invertedList.get(k);
-								if(dstId <= srcId){
-									continue;
-								}
-								UnfilteredResult t = new UnfilteredResult();
-								t.dstId = dstId;
-								t.dstMatchPos = candidateGramPos;
-								t.srcMatchPos = startPos;
-								t.gramLen = candidateGramLen;
-								resultsBeforeRefining.add(t);
+			getResultsFromIndex(srcId, resultsBeforeRefining);
+			refineResults(srcId, resultsBeforeRefining, results);
+		}
+		return results;
+	}
+	private void getResultsFromIndex(int srcId, ArrayList<UnfilteredResult> resultsBeforeRefining){
+		String src = mStrings.get(srcId);
+		int srcLen = src.length();
+		for (int dstLen = srcLen; dstLen <= Math.min(mGlobalIndex.size() - 1, srcLen + mThreshold); dstLen++) {
+			for (int gramNo = 0; gramNo <= mThreshold; gramNo++) {
+				int candidateGramPos = dstLen / (mThreshold + 1) * gramNo;
+				int candidateGramLen;
+				if (gramNo < dstLen % (mThreshold + 1)) {
+					candidateGramLen = dstLen / (mThreshold + 1) + 1;
+					candidateGramPos += gramNo;
+				} else {
+					candidateGramPos += dstLen % (mThreshold + 1);
+					candidateGramLen = dstLen / (mThreshold + 1);
+				}
+				int startPos = Math.max(candidateGramPos - mThreshold, 0);
+				int endPos = Math.min(candidateGramPos + mThreshold, srcLen - candidateGramLen);
+				for (; startPos <= endPos; startPos++) {
+					String gram = src.substring(startPos, startPos + candidateGramLen);
+					ArrayList<Integer> invertedList = mGlobalIndex.get(dstLen).get(gramNo).get(gram);
+					if (invertedList != null) {
+						for (int k = 0; k < invertedList.size(); k++) {
+							int dstId = invertedList.get(k);
+							if(dstId <= srcId){
+								continue;
 							}
+							UnfilteredResult t = new UnfilteredResult();
+							t.dstId = dstId;
+							t.dstMatchPos = candidateGramPos;
+							t.srcMatchPos = startPos;
+							t.gramLen = candidateGramLen;
+							resultsBeforeRefining.add(t);
 						}
 					}
 				}
 			}
-			Collections.sort(resultsBeforeRefining, new Comparator<UnfilteredResult>() {
-				@Override
-				public int compare(UnfilteredResult a, UnfilteredResult b) {
-					if (a.dstId < b.dstId)
-						return -1;
-					if (a.dstId > b.dstId)
-						return 1;
-					return 0;
-				}
-			});
-			HashSet<Integer> matchStringIds = new HashSet<Integer>();
-			for (UnfilteredResult t : resultsBeforeRefining) {
-				int dstId = t.dstId;
-				if(matchStringIds.contains(dstId)){
-					continue;
-				}
-				int dstMatchPos = t.dstMatchPos;
-				int srcMatchPos = t.srcMatchPos;
-				String dst = mStrings.get(dstId);
-				int len = t.gramLen;
-				String srcLeft = src.substring(0, srcMatchPos);
-				String dstLeft = mStrings.get(dstId).substring(0, dstMatchPos);
-				int srcRightLen = src.length() - srcMatchPos - len;
-				int dstRightLen = dst.length() - dstMatchPos - len;
-				int leftDistance = calculateEditDistanceWithThreshold(srcLeft, dstLeft, 
-					mThreshold); // - Math.abs(srcRightLen - dstRightLen));
-				if (leftDistance > mThreshold) {
+		}
+		Collections.sort(resultsBeforeRefining, new Comparator<UnfilteredResult>() {
+			@Override
+			public int compare(UnfilteredResult a, UnfilteredResult b) {
+				if (a.dstId < b.dstId)
+					return -1;
+				if (a.dstId > b.dstId)
+					return 1;
+				return 0;
+			}
+		});
+	}
+	private void refineResults(int srcId, ArrayList<UnfilteredResult> resultsBeforeRefining,
+		ArrayList<EditDistanceJoinResult> results){
+		HashSet<Integer> matchStringIds = new HashSet<Integer>();
+		for (UnfilteredResult t : resultsBeforeRefining) {
+			int dstId = t.dstId;
+			if(matchStringIds.contains(dstId)){
+				continue;
+			}
+			int dstMatchPos = t.dstMatchPos;
+			int srcMatchPos = t.srcMatchPos;
+			String dst = mStrings.get(dstId);
+			String src = mStrings.get(srcId);
+			int len = t.gramLen;
+			String srcLeft = src.substring(0, srcMatchPos);
+			String dstLeft = mStrings.get(dstId).substring(0, dstMatchPos);
+			int srcRightLen = src.length() - srcMatchPos - len;
+			int dstRightLen = dst.length() - dstMatchPos - len;
+			int leftDistance = calculateEditDistanceWithThreshold(srcLeft, dstLeft, 
+				mThreshold); // - Math.abs(srcRightLen - dstRightLen));
+			if (leftDistance > mThreshold) {
+				continue;
+			} else {
+				int rightThreshold = mThreshold - leftDistance;
+				String srcRight = src.substring(srcMatchPos + len);
+				String dstRight = dst.substring(dstMatchPos + len);
+				int rightDistance = calculateEditDistanceWithThreshold(srcRight, dstRight, rightThreshold);
+				if (rightDistance > rightThreshold) {
 					continue;
 				} else {
-					int rightThreshold = mThreshold - leftDistance;
-					String srcRight = src.substring(srcMatchPos + len);
-					String dstRight = dst.substring(dstMatchPos + len);
-					int rightDistance = calculateEditDistanceWithThreshold(srcRight, dstRight, rightThreshold);
-					if (rightDistance > rightThreshold) {
-						continue;
-					} else {
-						matchStringIds.add(dstId);
-						EditDistanceJoinResult r = new EditDistanceJoinResult();
-						r.src = mStrings.get(srcId);
-						r.dst = mStrings.get(dstId);
-						r.similarity = leftDistance + rightDistance;
-						results.add(r);
-					}
+					matchStringIds.add(dstId);
+					EditDistanceJoinResult r = new EditDistanceJoinResult();
+					r.src = mStrings.get(srcId);
+					r.dst = mStrings.get(dstId);
+					r.similarity = leftDistance + rightDistance;
+					results.add(r);
 				}
-
 			}
-			srcId++;
 		}
-		return results;
 	}
 	public void populate(String s) {
 		mStrings.add(s);
