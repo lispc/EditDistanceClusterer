@@ -29,6 +29,7 @@ class EditDistanceClusterer {
 	}
 	public void Populate(String s){
 		mStrings.add(s);
+		mJoiner.Populate(s);
 	}
 	public List<Set<Serializable>> getClusters(int radius) {
 		Map<Serializable, Set<Serializable>> clusterMap = new HashMap<Serializable, Set<Serializable>>();
