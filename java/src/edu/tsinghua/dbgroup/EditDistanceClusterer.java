@@ -27,13 +27,13 @@ class EditDistanceClusterer {
 		mJoiner = new EditDistanceJoiner();
 		mStrings = new ArrayList<String>();
 	}
-	public void Populate(String s){
+	public void populate(String s){
 		mStrings.add(s);
-		mJoiner.Populate(s);
+		mJoiner.populate(s);
 	}
 	public List<Set<Serializable>> getClusters(int radius) {
 		Map<Serializable, Set<Serializable>> clusterMap = new HashMap<Serializable, Set<Serializable>>();
-		ArrayList<EditDistanceJoinResult> results = mJoiner.GetJoinRawResults(radius);
+		ArrayList<EditDistanceJoinResult> results = mJoiner.getJoinResults(radius);
 		for (EditDistanceJoinResult item : results) {
 			String a = item.src;
 			String b = item.dst;

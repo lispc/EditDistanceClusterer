@@ -30,8 +30,8 @@ class EditDistanceJoinerTest {
 		} catch (IOException e) {
 			System.out.println(e.toString());
 		}
-		joiner.Populate(strings);
-		ArrayList<EditDistanceJoinResult> results = joiner.GetJoinRawResults(2);
+		joiner.populate(strings);
+		ArrayList<EditDistanceJoinResult> results = joiner.getJoinResults(2);
 		for (EditDistanceJoinResult item : results) {
 			System.out.println(item.src + " " + item.dst);
 		}
