@@ -1,11 +1,11 @@
 package edu.tsinghua.dbgroup;
 public class EditDistanceJoinResult {
-	public int srcId;
-	public int dstId;
+	public String src;
+	public String dst;
 	public int similarity;
 	@Override
 	public int hashCode() {
-		return srcId * dstId;
+		return src.hashCode() * dst.hashCode();
 	}
 	@Override
 	public boolean equals(Object obj) {
@@ -19,6 +19,6 @@ public class EditDistanceJoinResult {
 		if (other == this) {
 			return true;
 		}
-		return srcId == other.srcId && dstId == other.dstId;
+		return src == other.src && dst == other.dst;
 	}
 }

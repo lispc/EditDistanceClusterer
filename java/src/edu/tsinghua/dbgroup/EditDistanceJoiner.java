@@ -28,20 +28,6 @@ public class EditDistanceJoiner {
 		public int i3;
 		public int i4;
 	}
-	static class JoinComparator implements Comparator<EditDistanceJoinResult> {
-		@Override
-		public int compare(EditDistanceJoinResult a, EditDistanceJoinResult b) {
-			if (a.srcId < b.srcId)
-				return -1;
-			if (a.srcId == b.srcId && a.dstId < b.dstId)
-				return -1;
-			if (a.srcId == b.srcId && a.dstId == b.dstId && a.similarity < b.similarity)
-				return -1;
-			if (a.srcId == b.srcId && a.dstId == b.dstId && a.similarity == b.similarity)
-				return 0;
-			return 1;
-		}
-	}
 	public EditDistanceJoiner(){
 		mGlobalIndex = new ArrayList<ArrayList<HashMap<String, ArrayList<Integer>>>>();
 		mStrings = new ArrayList<String>();
@@ -49,6 +35,9 @@ public class EditDistanceJoiner {
 	public int CalculateEditDistanceWithThreshold(String s1, String s2, int threshold) {
 		if (threshold < 0) {
 			return 0;
+		}
+		if (threshold == 0) {
+			return s1.equals(s2) ? 0 : 1;
 		}
 		int l1 = s1.length();
 		int l2 = s2.length();
@@ -156,6 +145,9 @@ public class EditDistanceJoiner {
 						if (localList != null) {
 							for (int k = 0; k < localList.size(); k++) {
 								int id = localList.get(k);
+								if(id <= item_id){
+									continue;
+								}
 								Tuple t = new Tuple();
 								t.i1 = id;
 								t.i2 = pos;
@@ -167,8 +159,22 @@ public class EditDistanceJoiner {
 					}
 				}
 			}
+			Collections.sort(local_mid_res, new Comparator<Tuple>() {
+				@Override
+				public int compare(Tuple a, Tuple b) {
+					if (a.i1 < b.i1)
+						return -1;
+					if (a.i1 > b.i1)
+						return 1;
+					return 0;
+				}
+			});
+			HashSet<Integer> matchStringIds = new HashSet<Integer>();
 			for (Tuple t : local_mid_res) {
 				int tid = t.i1;
+				if(matchStringIds.contains(tid)){
+					continue;
+				}
 				int tpos = t.i2;
 				int ipos = t.i3;
 				int len = t.i4;
@@ -185,9 +191,10 @@ public class EditDistanceJoiner {
 					if (r_ed > r_tao) {
 						continue;
 					} else {
+						matchStringIds.add(tid);
 						EditDistanceJoinResult r = new EditDistanceJoinResult();
-						r.srcId = tid;
-						r.dstId = item_id;
+						r.src = mStrings.get(item_id);
+						r.dst = mStrings.get(tid);
 						r.similarity = ed_value + r_ed;
 						results.add(r);
 					}
@@ -196,11 +203,6 @@ public class EditDistanceJoiner {
 			}
 			item_id++;
 		}
-		Collections.sort(results, new JoinComparator());
-		Set<EditDistanceJoinResult> set = new LinkedHashSet<EditDistanceJoinResult>();
-		set.addAll(results);
-		results.clear();
-		results.addAll(set);
 		return results;
 	}
 	public void Populate(String s) {

@@ -35,8 +35,8 @@ class EditDistanceClusterer {
 		Map<Serializable, Set<Serializable>> clusterMap = new HashMap<Serializable, Set<Serializable>>();
 		ArrayList<EditDistanceJoinResult> results = mJoiner.GetJoinRawResults(radius);
 		for (EditDistanceJoinResult item : results) {
-			String a = mStrings.get(item.srcId);
-			String b = mStrings.get(item.dstId);
+			String a = item.src;
+			String b = item.dst;
 			if (a == b) continue;
 			if (clusterMap.containsKey(a) && clusterMap.get(a).contains(b)) continue;
 			if (clusterMap.containsKey(b) && clusterMap.get(b).contains(a)) continue;

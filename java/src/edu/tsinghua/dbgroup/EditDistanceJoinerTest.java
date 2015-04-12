@@ -18,6 +18,7 @@ import org.apache.commons.io.FileUtils;
 import edu.tsinghua.dbgroup.*;
 class EditDistanceJoinerTest {
 	public static void main (String[] args) {
+		EditDistanceJoiner joiner = new EditDistanceJoiner();
 		if(args.length != 2){
 			System.out.println("EditDistanceJoinerTest 2 author.data");
 			return;
@@ -29,13 +30,10 @@ class EditDistanceJoinerTest {
 		} catch (IOException e) {
 			System.out.println(e.toString());
 		}
-		EditDistanceJoiner joiner = new EditDistanceJoiner();
 		joiner.Populate(strings);
 		ArrayList<EditDistanceJoinResult> results = joiner.GetJoinRawResults(2);
 		for (EditDistanceJoinResult item : results) {
-			if (item.dstId > item.srcId) {
-				System.out.println("" + item.srcId + " " + item.dstId);
-			}
+			System.out.println(item.src + " " + item.dst);
 		}
 	}
 }

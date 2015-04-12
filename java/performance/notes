@@ -4,3 +4,6 @@
 4m21.126s
 ./test_perf.sh
 b82380146a9ab76673f81643179e7e45f0f2344b
+
+1m49.441s
+./test_join.sh
