@@ -3,6 +3,7 @@ import java.lang.Math;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.HashMap;
+import java.util.TreeMap;
 import java.util.LinkedHashSet;
 import java.util.Collections;
 import java.util.Set;
@@ -17,7 +18,7 @@ import java.util.Comparator;
 import edu.tsinghua.dbgroup.*;
 public class EditDistanceJoiner {
 	private List<String> mStrings;
-	private ArrayList<ArrayList<HashMap<String, ArrayList<Integer>>>> mGlobalIndex;
+	private TreeMap<Integer, ArrayList<HashMap<String, ArrayList<Integer>>>> mGlobalIndex;
 	private int mThreshold;
 	private int[][] mDistanceBuffer;
 	private int mMaxLength;
@@ -29,8 +30,9 @@ public class EditDistanceJoiner {
 		public int gramLen;
 	}
 	public EditDistanceJoiner(){
-		mGlobalIndex = new ArrayList<ArrayList<HashMap<String, ArrayList<Integer>>>>();
+		mGlobalIndex = new TreeMap<Integer, ArrayList<HashMap<String, ArrayList<Integer>>>>();
 		mStrings = new ArrayList<String>();
+		mMaxLength = 0;
 	}
 	public int calculateEditDistanceWithThreshold(String s1, String s2, int threshold) {
 		if (threshold < 0) {
@@ -75,42 +77,39 @@ public class EditDistanceJoiner {
 		}
 		return mDistanceBuffer[l2][l1];
 	}
-	private void buildIndex() {
-		mMaxLength = 0;
-		for (int lineNo = 0; lineNo < mStrings.size(); lineNo++) {
-			String stringIndexing = mStrings.get(lineNo);
-			int l = stringIndexing.length();//3 3 2
-			mMaxLength = Math.max(mMaxLength, l);
-			while (mGlobalIndex.size() <= l) {
-				int strLen = 0;
-				ArrayList<HashMap<String, ArrayList<Integer>>> subIndex = new ArrayList<HashMap<String, ArrayList<Integer>>>();
-				while (strLen < mThreshold + 1) { 
-					subIndex.add(new HashMap<String, ArrayList<Integer>>());
-					strLen++;
-				}
-				mGlobalIndex.add(subIndex);
+	private void indexStringById(int stringId, String stringIndexing){
+		int l = stringIndexing.length();//3 3 2
+		if (!mGlobalIndex.containsKey(l)) {
+			int strLen = 0;
+			ArrayList<HashMap<String, ArrayList<Integer>>> subIndex = new ArrayList<HashMap<String, ArrayList<Integer>>>();
+			while (strLen < mThreshold + 1) { 
+				subIndex.add(new HashMap<String, ArrayList<Integer>>());
+				strLen++;
 			}
-			int shortGramLen = l / (mThreshold + 1); //8/3=2
-			int longGramNum = l - shortGramLen * (mThreshold + 1); //2=8-2*3
-			int startPos = 0;
-			for (int i = 0; i < mThreshold + 1; i++) {
-				int gramLen;
-				if (i < longGramNum) {
-					gramLen = shortGramLen + 1;
-				} else {
-					gramLen = shortGramLen;
-				}
-				String gram = stringIndexing.substring(startPos, startPos + gramLen);
-				if (mGlobalIndex.get(l).get(i).containsKey(gram)) {
-					mGlobalIndex.get(l).get(i).get(gram).add(lineNo);
-				} else {
-					ArrayList<Integer> invertedList = new ArrayList<Integer>();
-					invertedList.add(lineNo);
-					mGlobalIndex.get(l).get(i).put(gram, invertedList);
-				}
-				startPos += gramLen;
-			}
+			mGlobalIndex.put(l, subIndex);
 		}
+		int shortGramLen = l / (mThreshold + 1); //8/3=2
+		int longGramNum = l - shortGramLen * (mThreshold + 1); //2=8-2*3
+		int startPos = 0;
+		for (int i = 0; i < mThreshold + 1; i++) {
+			int gramLen;
+			if (i < longGramNum) {
+				gramLen = shortGramLen + 1;
+			} else {
+				gramLen = shortGramLen;
+			}
+			String gram = stringIndexing.substring(startPos, startPos + gramLen);
+			if (mGlobalIndex.get(l).get(i).containsKey(gram)) {
+				mGlobalIndex.get(l).get(i).get(gram).add(stringId);
+			} else {
+				ArrayList<Integer> invertedList = new ArrayList<Integer>();
+				invertedList.add(stringId);
+				mGlobalIndex.get(l).get(i).put(gram, invertedList);
+			}
+			startPos += gramLen;
+		}
+	}
+	public void initEditDistanceBuffer(){
 		mDistanceBuffer = new int[mMaxLength][mMaxLength];
 		for (int i = 0; i < mMaxLength; i++) {
 			mDistanceBuffer[0][i] = i;
@@ -119,19 +118,46 @@ public class EditDistanceJoiner {
 	}
 	public ArrayList<EditDistanceJoinResult> getJoinResults(int threshold) {
 		mThreshold = threshold;
-		buildIndex();
+		initEditDistanceBuffer();
+		Collections.sort(mStrings, new Comparator<String>(){
+		    @Override
+		    public int compare(String o1, String o2) {  
+		      if (o1.length() > o2.length()) {
+		         return 1;
+		      } else if (o1.length() < o2.length()) {
+		         return -1;
+		      }
+		      return o1.compareTo(o2);
+		    }
+		});
 		ArrayList<EditDistanceJoinResult> results = new ArrayList<EditDistanceJoinResult>();
-		for (int srcId = 0; srcId < mStrings.size(); srcId++) {
+		int maxCandidateLen = 0;
+		int srcId = 0;
+		int dstId = 0;
+		while(srcId < mStrings.size()){
+			int srcLen = mStrings.get(srcId).length();
+			maxCandidateLen = srcLen + mThreshold;
+			while(mGlobalIndex.isEmpty() || 
+				(mGlobalIndex.lastKey() <= maxCandidateLen && dstId < mStrings.size())){
+				String stringIndexing = mStrings.get(dstId);
+				indexStringById(dstId, stringIndexing);
+				dstId++;
+			}
 			ArrayList<UnfilteredResult> resultsBeforeRefining = new ArrayList<UnfilteredResult>();
 			getResultsFromIndex(srcId, resultsBeforeRefining);
 			refineResults(srcId, resultsBeforeRefining, results);
+			mGlobalIndex.subMap(0, true, srcLen, false).clear();
+			srcId++;
 		}
 		return results;
 	}
 	private void getResultsFromIndex(int srcId, ArrayList<UnfilteredResult> resultsBeforeRefining){
 		String src = mStrings.get(srcId);
 		int srcLen = src.length();
-		for (int dstLen = srcLen; dstLen <= Math.min(mGlobalIndex.size() - 1, srcLen + mThreshold); dstLen++) {
+		for (int dstLen = srcLen; dstLen <= Math.min(mGlobalIndex.lastKey(), srcLen + mThreshold); dstLen++) {
+			if(!mGlobalIndex.containsKey(dstLen)){
+				continue;
+			}
 			for (int gramNo = 0; gramNo <= mThreshold; gramNo++) {
 				int candidateGramPos = dstLen / (mThreshold + 1) * gramNo;
 				int candidateGramLen;
@@ -192,9 +218,10 @@ public class EditDistanceJoiner {
 			String dstLeft = mStrings.get(dstId).substring(0, dstMatchPos);
 			int srcRightLen = src.length() - srcMatchPos - len;
 			int dstRightLen = dst.length() - dstMatchPos - len;
+			int leftThreshold = mThreshold - Math.abs(srcRightLen - dstRightLen);
 			int leftDistance = calculateEditDistanceWithThreshold(srcLeft, dstLeft, 
-				mThreshold); // - Math.abs(srcRightLen - dstRightLen));
-			if (leftDistance > mThreshold) {
+				leftThreshold);
+			if (leftDistance > leftThreshold) {
 				continue;
 			} else {
 				int rightThreshold = mThreshold - leftDistance;
@@ -216,9 +243,12 @@ public class EditDistanceJoiner {
 	}
 	public void populate(String s) {
 		mStrings.add(s);
+		mMaxLength = Math.max(mMaxLength, s.length());
 	}
 	public void populate(List<String> strings){
-		mStrings.addAll(strings);
+		for(String s : strings){
+			populate(s);
+		}
 	}
 	
 }
