@@ -1,4 +1,4 @@
-//package lispc;
+package edu.tsinghua.dbgroup;
 import java.util.List;
 import java.util.Set;
 import java.io.File;
@@ -7,8 +7,8 @@ import java.io.Serializable;
 import org.apache.commons.io.FileUtils;
 import edu.mit.simile.vicino.clustering.NGramClusterer;
 import edu.mit.simile.vicino.distances.LevenshteinDistance;
-import lispc.Joiner;
-class VicinoTester {
+import edu.tsinghua.dbgroup.*;
+class EditDistanceClusterTest {
     public static void main (String[] args) {
         String inputFileName = "input.data";
         if (args.length == 2) {
@@ -16,7 +16,7 @@ class VicinoTester {
         }
         List<String> strings = null;
         try {
-            strings = FileUtils.readLines(new File("input.data"), "UTF-8");
+            strings = FileUtils.readLines(inputFileName, "UTF-8");
             for (String s : strings) {
                 System.out.println(s);
             }
@@ -28,7 +28,7 @@ class VicinoTester {
             Joiner.populate(s);
             clusterer.populate(s);
         }
-        List<Set<Serializable>> results = Joiner.getClusters(1);
+        List<Set<Serializable>> results = EditDistanceCluster.getClusters(1);
         for (Set<Serializable> set : results) {
             System.out.println("=== new cluster 1===");
             for (Serializable elem : set) {

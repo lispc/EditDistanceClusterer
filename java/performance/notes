@@ -1,0 +1,5 @@
+29.3s: ./passjoin-64 2 author.data > author.out
+// python trim.py > trim.out
+
+4m21.126s
+./test_perf.sh
