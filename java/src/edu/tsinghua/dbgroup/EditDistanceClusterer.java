@@ -15,7 +15,7 @@ import java.io.IOException;
 import java.io.Serializable;
 import java.util.Comparator;
 import edu.tsinghua.dbgroup.*;
-class EditDistanceClusterer {
+public class EditDistanceClusterer {
 	private EditDistanceJoiner mJoiner;
 	private List<String> mStrings;
 	public static class SizeComparator implements Comparator<Set<Serializable>> {
