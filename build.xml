@@ -1,0 +1,34 @@
+<project name="EditDistanceJoiner" basedir="." default="jar">
+    <property name="src.dir"     value="src"/>
+    <property name="build.dir"   value="build"/>
+    <property name="classes.dir" value="${build.dir}/classes"/>
+    <property name="sample_classes.dir" value="${build.dir}/sample_classes"/>
+    <property name="jar.dir"     value="${build.dir}/jar"/>
+    <property name="lib.dir"     value="lib"/>
+    <property name="sample.dir"  value="sample"/>
+    <path id="classpath">
+        <fileset dir="${lib.dir}" includes="**/*.jar"/>
+    </path>
+    <target name="clean">
+        <delete dir="${build.dir}"/>
+    </target>
+
+    <target name="compile">
+        <mkdir dir="${classes.dir}"/>
+        <javac includeantruntime="false" srcdir="${src.dir}" destdir="${classes.dir}" classpathref="classpath"/>
+    </target>
+    <target name="jar" depends="compile">
+        <mkdir dir="${jar.dir}"/>
+        <jar destfile="${jar.dir}/${ant.project.name}.jar" basedir="${classes.dir}">
+        </jar>
+    </target>
+
+    <target name="run" depends="jar">
+        <mkdir dir="${sample_classes.dir}"/>
+        <javac includeantruntime="false" srcdir="${sample.dir}" destdir="${sample_classes.dir}" classpathref="classpath"/>
+        <java jar="${jar.dir}/${ant.project.name}.jar" fork="true">
+            <arg value="-h"/>
+        </java>
+    </target>
+
+</project>
