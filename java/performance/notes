@@ -25,18 +25,18 @@ b069a384cff017dc12861a3adcd8009330be8178
 ./test_join.sh
 6e5cb4de688a3465648e496e51225a52e44ca273
 
+./test_cluster.sh
 20150421 
 real    1m53.339s
 user    2m5.726s
 sys 0m14.159s
-./test_cluster.sh
 4920e99ee72274ee393f94897b061f4340e7f81d
 
+./test_cluster.sh
 2m10.352s // aliyun
-
 
 ./run_vicino.sh
 real	64m1.320s
 user	126m54.721s
 sys	0m37.266s
-
+a90849b312d9038ec7927b6322776a56836d99cc
