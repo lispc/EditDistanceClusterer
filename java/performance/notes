@@ -24,3 +24,9 @@ b069a384cff017dc12861a3adcd8009330be8178
 1m39.564s
 ./test_join.sh
 6e5cb4de688a3465648e496e51225a52e44ca273
+
+20150421 
+real    1m53.339s
+user    2m5.726s
+sys 0m14.159s
+./test_cluster.sh
