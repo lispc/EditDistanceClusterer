@@ -20,7 +20,7 @@ class EditDistanceJoinerTest {
 	public static void main (String[] args) {
 		EditDistanceJoiner joiner = new EditDistanceJoiner();
 		if(args.length != 2){
-			System.out.println("EditDistanceJoinerTest 2 author.data");
+			System.out.println("EditDistanceJoinerTest threshold fileName");
 			return;
 		}
 		int threshold = Integer.parseInt(args[0]);
