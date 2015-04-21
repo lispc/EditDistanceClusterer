@@ -40,3 +40,7 @@ real	64m1.320s
 user	126m54.721s
 sys	0m37.266s
 a90849b312d9038ec7927b6322776a56836d99cc
+
+./run_vicino.sh
+76m43.763s
+
