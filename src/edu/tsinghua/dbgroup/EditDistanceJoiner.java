@@ -1,27 +1,19 @@
 package edu.tsinghua.dbgroup;
 import java.lang.Math;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.HashMap;
-import java.util.TreeMap;
-import java.util.LinkedHashSet;
-import java.util.Collections;
-import java.util.Set;
-import java.util.TreeSet;
-import java.util.HashSet;
-import java.util.Map;
+import java.util.*;
 import java.util.Map.Entry;
-import java.io.File;
-import java.io.IOException;
-import java.io.Serializable;
-import java.util.Comparator;
+import java.io.*;
+import java.util.concurrent.*;
 import edu.tsinghua.dbgroup.*;
 public class EditDistanceJoiner {
 	private List<String> mStrings;
 	private TreeMap<Integer, ArrayList<HashMap<String, ArrayList<Integer>>>> mGlobalIndex;
 	private int mThreshold;
-	private int[][] mDistanceBuffer;
+	private int[][][] mDistanceBuffers;
+	private int mNumThreads;
 	private int mMaxLength;
+	private ArrayList<EditDistanceJoinResult> mResults;
+	private ArrayList<FilteredRawResult> mRawResults;
 	
 	static class UnfilteredResult {
 		public int dstId;
@@ -29,12 +21,17 @@ public class EditDistanceJoiner {
 		public int srcMatchPos;
 		public int gramLen;
 	}
+	static class FilteredRawResult {
+		public int srcId;
+		public int dstId;
+		public int similarity;
+	}
 	public EditDistanceJoiner(){
 		mGlobalIndex = new TreeMap<Integer, ArrayList<HashMap<String, ArrayList<Integer>>>>();
 		mStrings = new ArrayList<String>();
 		mMaxLength = 0;
 	}
-	public int calculateEditDistanceWithThreshold(String s1, String s2, int threshold) {
+	public int calculateEditDistanceWithThreshold(String s1, String s2, int threshold, int[][] distanceBuffer) {
 		if (threshold < 0) {
 			return 0;
 		}
@@ -53,21 +50,21 @@ public class EditDistanceJoiner {
 			int start = Math.max(j - threshold, 1);
 			int end = Math.min(l2, j + threshold);
 			if (j - threshold - 1 >= 1) {
-				mDistanceBuffer[j - threshold - 1][j] = threshold + 1;
+				distanceBuffer[j - threshold - 1][j] = threshold + 1;
 			}
 			for (int i = start; i <= end; i++) {
 				if (s1.charAt(j - 1) == s2.charAt(i - 1)) {
-					mDistanceBuffer[i][j] = mDistanceBuffer[i - 1][j - 1];
+					distanceBuffer[i][j] = distanceBuffer[i - 1][j - 1];
 				} else {
-					mDistanceBuffer[i][j] = Math.min(mDistanceBuffer[i - 1][j - 1] + 1,
-					                                Math.min(mDistanceBuffer[i - 1][j] + 1, mDistanceBuffer[i][j - 1] + 1));
+					distanceBuffer[i][j] = Math.min(distanceBuffer[i - 1][j - 1] + 1,
+						Math.min(distanceBuffer[i - 1][j] + 1, distanceBuffer[i][j - 1] + 1));
 				}
 			}
 			if (end < l2)
-				mDistanceBuffer[end + 1][j] = threshold + 1;
+				distanceBuffer[end + 1][j] = threshold + 1;
 			boolean earlyTerminateFlag = true;
 			for (int i = start; i <= end; i++) {
-				if (mDistanceBuffer[i][j] <= threshold) {
+				if (distanceBuffer[i][j] <= threshold) {
 					earlyTerminateFlag = false;
 					break;
 				}
@@ -75,7 +72,7 @@ public class EditDistanceJoiner {
 			if (earlyTerminateFlag)
 				return threshold + 1;
 		}
-		return mDistanceBuffer[l2][l1];
+		return distanceBuffer[l2][l1];
 	}
 	private void indexStringById(int stringId, String stringIndexing){
 		int l = stringIndexing.length();//3 3 2
@@ -110,30 +107,30 @@ public class EditDistanceJoiner {
 		}
 	}
 	public void initEditDistanceBuffer(){
-		mDistanceBuffer = new int[mMaxLength][mMaxLength];
-		for (int i = 0; i < mMaxLength; i++) {
-			mDistanceBuffer[0][i] = i;
-			mDistanceBuffer[i][0] = i;
+		mDistanceBuffers = new int[mNumThreads][mMaxLength][mMaxLength];
+		for (int n = 0; n < mNumThreads; n++) {
+			for (int i = 0; i < mMaxLength; i++) {
+				mDistanceBuffers[n][0][i] = i;
+				mDistanceBuffers[n][i][0] = i;
+			}
 		}
 	}
 	public ArrayList<EditDistanceJoinResult> getJoinResults(int threshold) {
 		mThreshold = threshold;
+		mNumThreads = Runtime.getRuntime().availableProcessors();
 		initEditDistanceBuffer();
 		Collections.sort(mStrings, new Comparator<String>(){
-		    @Override
-		    public int compare(String o1, String o2) {  
-		      if (o1.length() > o2.length()) {
-		         return 1;
-		      } else if (o1.length() < o2.length()) {
-		         return -1;
-		      }
-		      return o1.compareTo(o2);
-		    }
+			@Override
+			public int compare(String o1, String o2) {  
+				return compareString(o1, o2);
+			}
 		});
-		ArrayList<EditDistanceJoinResult> results = new ArrayList<EditDistanceJoinResult>();
+		mResults = new ArrayList<EditDistanceJoinResult>();
+		mRawResults = new ArrayList<FilteredRawResult>();
 		int maxCandidateLen = 0;
 		int srcId = 0;
 		int dstId = 0;
+		ExecutorService executor = Executors.newFixedThreadPool(mNumThreads);
 		while(srcId < mStrings.size()){
 			int srcLen = mStrings.get(srcId).length();
 			maxCandidateLen = srcLen + mThreshold;
@@ -145,11 +142,44 @@ public class EditDistanceJoiner {
 			}
 			ArrayList<UnfilteredResult> resultsBeforeRefining = new ArrayList<UnfilteredResult>();
 			getResultsFromIndex(srcId, resultsBeforeRefining);
-			refineResults(srcId, resultsBeforeRefining, results);
+			final int currentId = srcId;
+			executor.submit(() -> {
+				long threadId = Thread.currentThread().getId() % mNumThreads;
+				ArrayList<FilteredRawResult> resultsRefined = 
+				refineResults(currentId, resultsBeforeRefining, mDistanceBuffers[(int)threadId]);
+				synchronized(mRawResults){
+					mRawResults.addAll(resultsRefined);
+				}
+			});
 			mGlobalIndex.subMap(0, true, srcLen, false).clear();
 			srcId++;
 		}
-		return results;
+		executor.shutdown();
+        //long startTime = System.currentTimeMillis();
+		Collections.sort(mRawResults, new Comparator<FilteredRawResult>(){
+			@Override
+			public int compare(FilteredRawResult o1, FilteredRawResult o2) {  
+				if (o1.srcId < o2.srcId)
+					return -1;
+				if (o1.srcId > o2.srcId)
+					return 1;
+				if (o1.dstId < o2.dstId)
+					return -1;
+				if (o1.dstId > o2.dstId)
+					return 1;
+				return 0;
+			}
+		});
+		for(FilteredRawResult rawResult : mRawResults) {
+			EditDistanceJoinResult r = new EditDistanceJoinResult();
+			r.src = mStrings.get(rawResult.srcId);
+			r.dst = mStrings.get(rawResult.dstId);
+			r.similarity = rawResult.similarity;
+			mResults.add(r);
+		}
+		//System.err.println("Sort Time cost : " + (System.currentTimeMillis() - startTime) / 1000 + 
+		//	" seconds");
+		return mResults;
 	}
 	private void getResultsFromIndex(int srcId, ArrayList<UnfilteredResult> resultsBeforeRefining){
 		String src = mStrings.get(srcId);
@@ -201,8 +231,9 @@ public class EditDistanceJoiner {
 			}
 		});
 	}
-	private void refineResults(int srcId, ArrayList<UnfilteredResult> resultsBeforeRefining,
-		ArrayList<EditDistanceJoinResult> results){
+	private ArrayList<FilteredRawResult> refineResults(int srcId, 
+		ArrayList<UnfilteredResult> resultsBeforeRefining, int[][] distanceBuffer){
+		ArrayList<FilteredRawResult> resultsRefined = new ArrayList<FilteredRawResult>();
 		HashSet<Integer> matchStringIds = new HashSet<Integer>();
 		for (UnfilteredResult t : resultsBeforeRefining) {
 			int dstId = t.dstId;
@@ -220,26 +251,28 @@ public class EditDistanceJoiner {
 			int dstRightLen = dst.length() - dstMatchPos - len;
 			int leftThreshold = mThreshold - Math.abs(srcRightLen - dstRightLen);
 			int leftDistance = calculateEditDistanceWithThreshold(srcLeft, dstLeft, 
-				leftThreshold);
+				leftThreshold, distanceBuffer);
 			if (leftDistance > leftThreshold) {
 				continue;
 			} else {
 				int rightThreshold = mThreshold - leftDistance;
 				String srcRight = src.substring(srcMatchPos + len);
 				String dstRight = dst.substring(dstMatchPos + len);
-				int rightDistance = calculateEditDistanceWithThreshold(srcRight, dstRight, rightThreshold);
+				int rightDistance = calculateEditDistanceWithThreshold(srcRight, dstRight,
+					rightThreshold, distanceBuffer);
 				if (rightDistance > rightThreshold) {
 					continue;
 				} else {
 					matchStringIds.add(dstId);
-					EditDistanceJoinResult r = new EditDistanceJoinResult();
-					r.src = mStrings.get(srcId);
-					r.dst = mStrings.get(dstId);
+					FilteredRawResult r = new FilteredRawResult();
+					r.srcId = srcId;
+					r.dstId = dstId;
 					r.similarity = leftDistance + rightDistance;
-					results.add(r);
+					resultsRefined.add(r);
 				}
 			}
 		}
+		return resultsRefined;
 	}
 	public void populate(String s) {
 		mStrings.add(s);
@@ -250,5 +283,13 @@ public class EditDistanceJoiner {
 			populate(s);
 		}
 	}
-	
+	static private int compareString(String o1, String o2) {
+		if (o1.length() > o2.length()) {
+			return 1;
+		} else if (o1.length() < o2.length()) {
+			return -1;
+		}
+		return o1.compareTo(o2);
+	}
+
 }
