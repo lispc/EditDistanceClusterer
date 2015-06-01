@@ -130,6 +130,7 @@ public class EditDistanceJoiner {
     public ArrayList<EditDistanceJoinResult> getJoinResults() {
         long mainTid = Thread.currentThread().getId();
         initEditDistanceBuffer();
+        mStrings = new ArrayList<String>(new TreeSet<String>(mStrings));
         Collections.sort(mStrings, new Comparator<String>(){
             @Override
             public int compare(String o1, String o2) {  
