@@ -9,7 +9,7 @@ class EditDistanceJoinerTest {
 			return;
 		}
 		int threshold = Integer.parseInt(args[0]);
-		EditDistanceJoiner joiner = new EditDistanceJoiner();
+		EditDistanceJoiner joiner = new EditDistanceJoiner(threshold);
         try(BufferedReader br = new BufferedReader(new FileReader(args[1]))) {
             String line = br.readLine();
             while (line != null) {
@@ -21,7 +21,7 @@ class EditDistanceJoinerTest {
             System.exit(-1);
         }
         long startTime = System.currentTimeMillis();
-		ArrayList<EditDistanceJoinResult> results = joiner.getJoinResults(threshold);
+		ArrayList<EditDistanceJoinResult> results = joiner.getJoinResults();
 		System.err.println("Time cost : " + (System.currentTimeMillis() - startTime) / 1000 + 
 			" seconds");
 		for (EditDistanceJoinResult item : results) {

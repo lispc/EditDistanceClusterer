@@ -17,27 +17,24 @@ import java.util.Comparator;
 import edu.tsinghua.dbgroup.*;
 public class EditDistanceClusterer {
 	private EditDistanceJoiner mJoiner;
-	private List<String> mStrings;
 	public static class SizeComparator implements Comparator<Set<Serializable>> {
         public int compare(Set<Serializable> o1, Set<Serializable> o2) {
             return o2.size() - o1.size();
         }
     }
-	public EditDistanceClusterer(){
-		mJoiner = new EditDistanceJoiner();
-		mStrings = new ArrayList<String>();
+	public EditDistanceClusterer(int threshold){
+		mJoiner = new EditDistanceJoiner(threshold);
 	}
 	public void populate(String s){
-		mStrings.add(s);
 		mJoiner.populate(s);
 	}
-	public List<Set<Serializable>> getClusters(int radius) {
+	public List<Set<Serializable>> getClusters() {
 		Map<Serializable, Set<Serializable>> clusterMap = new HashMap<Serializable, Set<Serializable>>();
-		ArrayList<EditDistanceJoinResult> results = mJoiner.getJoinResults(radius);
+		ArrayList<EditDistanceJoinResult> results = mJoiner.getJoinResults();
 		for (EditDistanceJoinResult item : results) {
 			String a = item.src;
 			String b = item.dst;
-			if (a == b) continue;
+			if (a.equals(b)) continue;
 			if (clusterMap.containsKey(a) && clusterMap.get(a).contains(b)) continue;
 			if (clusterMap.containsKey(b) && clusterMap.get(b).contains(a)) continue;
 			Set<Serializable> l1 = null;
@@ -62,7 +59,6 @@ public class EditDistanceClusterer {
 		Set<Set<Serializable>> clusters = new HashSet<Set<Serializable>>();
 		for (Entry<Serializable, Set<Serializable>> e : clusterMap.entrySet()) {
 			Set<Serializable> v = e.getValue();
-			//System.out.println(v.getClass().getName() + " : " + v.hashCode() + " vs " + System.identityHashCode(v));
 			if (v.size() > 1) {
 				clusters.add(v);
 			}

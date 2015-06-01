@@ -26,10 +26,11 @@ public class EditDistanceJoiner {
 		public int dstId;
 		public int similarity;
 	}
-	public EditDistanceJoiner(){
+	public EditDistanceJoiner(int threshold){
 		mGlobalIndex = new TreeMap<Integer, ArrayList<HashMap<String, ArrayList<Integer>>>>();
 		mStrings = new ArrayList<String>();
 		mMaxLength = 0;
+		mThreshold = threshold;
 	}
 	public int calculateEditDistanceWithThreshold(String s1, String s2, int threshold, int[][] distanceBuffer) {
 		if (threshold < 0) {
@@ -115,8 +116,7 @@ public class EditDistanceJoiner {
 			}
 		}
 	}
-	public ArrayList<EditDistanceJoinResult> getJoinResults(int threshold) {
-		mThreshold = threshold;
+	public ArrayList<EditDistanceJoinResult> getJoinResults() {
 		mNumThreads = Runtime.getRuntime().availableProcessors();
 		initEditDistanceBuffer();
 		Collections.sort(mStrings, new Comparator<String>(){
@@ -155,7 +155,11 @@ public class EditDistanceJoiner {
 			srcId++;
 		}
 		executor.shutdown();
-        //long startTime = System.currentTimeMillis();
+		try {
+		    executor.awaitTermination(Long.MAX_VALUE, TimeUnit.NANOSECONDS);
+		} catch (InterruptedException e) {
+			System.err.println(e.getMessage());
+		}
 		Collections.sort(mRawResults, new Comparator<FilteredRawResult>(){
 			@Override
 			public int compare(FilteredRawResult o1, FilteredRawResult o2) {  
@@ -177,8 +181,6 @@ public class EditDistanceJoiner {
 			r.similarity = rawResult.similarity;
 			mResults.add(r);
 		}
-		//System.err.println("Sort Time cost : " + (System.currentTimeMillis() - startTime) / 1000 + 
-		//	" seconds");
 		return mResults;
 	}
 	private void getResultsFromIndex(int srcId, ArrayList<UnfilteredResult> resultsBeforeRefining){
@@ -275,8 +277,10 @@ public class EditDistanceJoiner {
 		return resultsRefined;
 	}
 	public void populate(String s) {
-		mStrings.add(s);
-		mMaxLength = Math.max(mMaxLength, s.length());
+		if(s.length() > mThreshold){
+			mStrings.add(s);
+			mMaxLength = Math.max(mMaxLength, s.length());
+		}
 	}
 	public void populate(List<String> strings){
 		for(String s : strings){

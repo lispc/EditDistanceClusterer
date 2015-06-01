@@ -19,6 +19,6 @@ public class EditDistanceJoinResult {
 		if (other == this) {
 			return true;
 		}
-		return src == other.src && dst == other.dst;
+		return src.equals(other.src) && dst.equals(other.dst);
 	}
 }

@@ -9,7 +9,7 @@ class EditDistanceClustererTest {
 			System.exit(-1);
 		}
         int threshold = Integer.parseInt(args[0]);
-        EditDistanceClusterer clusterer = new EditDistanceClusterer();
+        EditDistanceClusterer clusterer = new EditDistanceClusterer(threshold);
         try(BufferedReader br = new BufferedReader(new FileReader(args[1]))) {
             String line = br.readLine();
             while (line != null) {
@@ -20,7 +20,7 @@ class EditDistanceClustererTest {
             System.out.println(e.toString());
             System.exit(-1);
         }
-        List<Set<Serializable>> results = clusterer.getClusters(threshold);
+        List<Set<Serializable>> results = clusterer.getClusters();
         for (Set<Serializable> set : results) {
             System.out.println("=== new cluster ===");
             for (Serializable elem : set) {
