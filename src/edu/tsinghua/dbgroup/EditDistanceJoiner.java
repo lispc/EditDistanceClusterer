@@ -5,6 +5,7 @@ import java.util.Map.Entry;
 import java.io.*;
 import java.util.concurrent.*;
 import java.util.concurrent.ThreadPoolExecutor.CallerRunsPolicy;
+import java.util.concurrent.atomic.AtomicInteger;
 import edu.tsinghua.dbgroup.*;
 public class EditDistanceJoiner {
     private List<String> mStrings;
@@ -15,7 +16,8 @@ public class EditDistanceJoiner {
     private int mMaxLength;
     private ArrayList<EditDistanceJoinResult> mResults;
     private ArrayList<FilteredRawResult> mRawResults;
-    
+    AtomicInteger _left_cnt = new AtomicInteger();
+    AtomicInteger _right_cnt = new AtomicInteger();
     static class UnfilteredResult {
         public int dstId;
         public int dstMatchPos;
@@ -43,15 +45,16 @@ public class EditDistanceJoiner {
     public EditDistanceJoiner(int threshold) {
         this(threshold, Runtime.getRuntime().availableProcessors());
     }
-    public int calculateEditDistanceWithThreshold(String s1, String s2, int threshold, int[][] distanceBuffer) {
+    public int calculateEditDistanceWithThreshold(String s1, int start1, int l1, 
+        String s2, int start2, int l2, int threshold, int[][] distanceBuffer){
         if (threshold < 0) {
             return 0;
         }
         if (threshold == 0) {
-            return s1.equals(s2) ? 0 : 1;
+            String sub1 = s1.substring(start1, start1 + l1);
+            String sub2 = s2.substring(start2, start2 + l2);
+            return sub1.equals(sub2) ? 0 : 1;
         }
-        int l1 = s1.length();
-        int l2 = s2.length();
         if (l1 == 0) {
             return l2;
         }
@@ -65,7 +68,7 @@ public class EditDistanceJoiner {
                 distanceBuffer[j - threshold - 1][j] = threshold + 1;
             }
             for (int i = start; i <= end; i++) {
-                if (s1.charAt(j - 1) == s2.charAt(i - 1)) {
+                if (s1.charAt(start1 + j - 1) == s2.charAt(start2 + i - 1)) {
                     distanceBuffer[i][j] = distanceBuffer[i - 1][j - 1];
                 } else {
                     distanceBuffer[i][j] = Math.min(distanceBuffer[i - 1][j - 1] + 1,
@@ -217,6 +220,7 @@ public class EditDistanceJoiner {
             mResults.add(r);
         }
         System.err.println("" + resultsBeforeRefiningNum + " to " + mResults.size());
+        System.err.println("left " + _left_cnt.get() + " right " + _right_cnt.get());
         return mResults;
     }
     private void getResultsFromIndex(int srcId, ArrayList<UnfilteredResult> resultsBeforeRefining){
@@ -237,10 +241,13 @@ public class EditDistanceJoiner {
                     candidateGramPos += dstLen % (mThreshold + 1);
                     candidateGramLen = dstLen / (mThreshold + 1);
                 }
-                int startPos = Math.max(candidateGramPos - (mThreshold - delta) / 2, 0);
-                int endPos = Math.min(candidateGramPos + (mThreshold + delta) / 2, srcLen - candidateGramLen);
+                int startPos = Math.max(Math.max(candidateGramPos - gramNo, 
+                    candidateGramPos + delta + gramNo - mThreshold), 0);
+                int endPos = Math.min(Math.min(candidateGramPos + gramNo, 
+                    candidateGramPos + delta - gramNo + mThreshold), srcLen - candidateGramLen);
                 for (; startPos <= endPos; startPos++) {
                     String gram = src.substring(startPos, startPos + candidateGramLen);
+                    //System.err.println("dstLen " + dstLen + " gramNo " + gramNo + " gram " + gram);
                     ArrayList<Integer> invertedList = mGlobalIndex.get(dstLen).get(gramNo).get(gram);
                     if (invertedList != null) {
                         for (int k = 0; k < invertedList.size(); k++) {
@@ -270,6 +277,30 @@ public class EditDistanceJoiner {
             }
         });
     }
+    private int filterCandidate(String src, String dst, int srcMatchPos, int dstMatchPos, int len,
+        int[][] distanceBuffer){
+        //System.err.println(src + " : " + dst + " : " + src.substring(srcMatchPos, srcMatchPos + len));
+        int srcRightLen = src.length() - srcMatchPos - len;
+        int dstRightLen = dst.length() - dstMatchPos - len;
+        int leftThreshold = mThreshold - Math.abs(srcRightLen - dstRightLen);
+        int leftDistance = calculateEditDistanceWithThreshold(src, 0, srcMatchPos,
+            dst, 0, dstMatchPos, 
+            leftThreshold, distanceBuffer);
+        _left_cnt.getAndIncrement();
+        if (leftDistance > leftThreshold) {
+            return -1;
+        }
+        int rightThreshold = mThreshold - leftDistance;
+        int rightDistance = calculateEditDistanceWithThreshold(
+            src, srcMatchPos + len, src.length() - srcMatchPos - len, 
+            dst, dstMatchPos + len, dst.length() - dstMatchPos - len,
+            rightThreshold, distanceBuffer);
+        _right_cnt.getAndIncrement();
+        if (rightDistance > rightThreshold) {
+            return -1;
+        }
+        return leftDistance + rightDistance;
+    }
     private ArrayList<FilteredRawResult> refineResults(int srcId, 
         ArrayList<UnfilteredResult> resultsBeforeRefining, int[][] distanceBuffer){
         ArrayList<FilteredRawResult> resultsRefined = new ArrayList<FilteredRawResult>();
@@ -284,31 +315,14 @@ public class EditDistanceJoiner {
             String dst = mStrings.get(dstId);
             String src = mStrings.get(srcId);
             int len = t.gramLen;
-            String srcLeft = src.substring(0, srcMatchPos);
-            String dstLeft = mStrings.get(dstId).substring(0, dstMatchPos);
-            int srcRightLen = src.length() - srcMatchPos - len;
-            int dstRightLen = dst.length() - dstMatchPos - len;
-            int leftThreshold = mThreshold - Math.abs(srcRightLen - dstRightLen);
-            int leftDistance = calculateEditDistanceWithThreshold(srcLeft, dstLeft, 
-                leftThreshold, distanceBuffer);
-            if (leftDistance > leftThreshold) {
-                continue;
-            } else {
-                int rightThreshold = mThreshold - leftDistance;
-                String srcRight = src.substring(srcMatchPos + len);
-                String dstRight = dst.substring(dstMatchPos + len);
-                int rightDistance = calculateEditDistanceWithThreshold(srcRight, dstRight,
-                    rightThreshold, distanceBuffer);
-                if (rightDistance > rightThreshold) {
-                    continue;
-                } else {
-                    matchStringIds.add(dstId);
-                    FilteredRawResult r = new FilteredRawResult();
-                    r.srcId = srcId;
-                    r.dstId = dstId;
-                    r.similarity = leftDistance + rightDistance;
-                    resultsRefined.add(r);
-                }
+            int distance = filterCandidate(src, dst, srcMatchPos, dstMatchPos, len, distanceBuffer);
+            if(distance != -1){
+                FilteredRawResult r = new FilteredRawResult();
+                r.srcId = srcId;
+                r.dstId = dstId;
+                r.similarity = distance;
+                resultsRefined.add(r);
+                matchStringIds.add(dstId);
             }
         }
         return resultsRefined;
