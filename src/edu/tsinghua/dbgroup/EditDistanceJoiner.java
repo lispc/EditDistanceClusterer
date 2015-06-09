@@ -128,6 +128,8 @@ public class EditDistanceJoiner {
         }
     }
     public ArrayList<EditDistanceJoinResult> getJoinResults() {
+        long resultsBeforeRefiningNum = 0;
+        long resultsRefinedNum = 0;
         long mainTid = Thread.currentThread().getId();
         initEditDistanceBuffer();
         mStrings = new ArrayList<String>(new TreeSet<String>(mStrings));
@@ -159,6 +161,7 @@ public class EditDistanceJoiner {
             }
             ArrayList<UnfilteredResult> resultsBeforeRefining = new ArrayList<UnfilteredResult>();
             getResultsFromIndex(srcId, resultsBeforeRefining);
+            resultsBeforeRefiningNum += resultsBeforeRefining.size();
             final int currentId = srcId;
             if (mNumThreads != 0) {
                 executor.submit(() -> {
@@ -213,6 +216,7 @@ public class EditDistanceJoiner {
             r.similarity = rawResult.similarity;
             mResults.add(r);
         }
+        System.err.println("" + resultsBeforeRefiningNum + " to " + mResults.size());
         return mResults;
     }
     private void getResultsFromIndex(int srcId, ArrayList<UnfilteredResult> resultsBeforeRefining){
@@ -222,6 +226,7 @@ public class EditDistanceJoiner {
             if(!mGlobalIndex.containsKey(dstLen)){
                 continue;
             }
+            int delta = srcLen - dstLen;
             for (int gramNo = 0; gramNo <= mThreshold; gramNo++) {
                 int candidateGramPos = dstLen / (mThreshold + 1) * gramNo;
                 int candidateGramLen;
@@ -232,8 +237,8 @@ public class EditDistanceJoiner {
                     candidateGramPos += dstLen % (mThreshold + 1);
                     candidateGramLen = dstLen / (mThreshold + 1);
                 }
-                int startPos = Math.max(candidateGramPos - mThreshold, 0);
-                int endPos = Math.min(candidateGramPos + mThreshold, srcLen - candidateGramLen);
+                int startPos = Math.max(candidateGramPos - (mThreshold - delta) / 2, 0);
+                int endPos = Math.min(candidateGramPos + (mThreshold + delta) / 2, srcLen - candidateGramLen);
                 for (; startPos <= endPos; startPos++) {
                     String gram = src.substring(startPos, startPos + candidateGramLen);
                     ArrayList<Integer> invertedList = mGlobalIndex.get(dstLen).get(gramNo).get(gram);
