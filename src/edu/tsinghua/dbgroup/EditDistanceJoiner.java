@@ -5,7 +5,6 @@ import java.util.Map.Entry;
 import java.io.*;
 import java.util.concurrent.*;
 import java.util.concurrent.ThreadPoolExecutor.CallerRunsPolicy;
-import java.util.concurrent.atomic.AtomicInteger;
 import edu.tsinghua.dbgroup.*;
 public class EditDistanceJoiner {
     private List<String> mStrings;
@@ -16,8 +15,6 @@ public class EditDistanceJoiner {
     private int mMaxLength;
     private ArrayList<EditDistanceJoinResult> mResults;
     private ArrayList<FilteredRawResult> mRawResults;
-    AtomicInteger _left_cnt = new AtomicInteger();
-    AtomicInteger _right_cnt = new AtomicInteger();
     static class UnfilteredResult {
         public int dstId;
         public int dstMatchPos;
@@ -208,8 +205,6 @@ public class EditDistanceJoiner {
             r.similarity = rawResult.similarity;
             mResults.add(r);
         }
-        System.err.println("" + resultsBeforeRefiningNum + " to " + mResults.size());
-        System.err.println("left " + _left_cnt.get() + " right " + _right_cnt.get());
         return mResults;
     }
     private void getResultsFromIndex(int srcId, ArrayList<UnfilteredResult> resultsBeforeRefining){
@@ -231,7 +226,6 @@ public class EditDistanceJoiner {
                     candidateGramPos + delta - gramNo + mThreshold), srcLen - candidateGramLen);
                 for (; startPos <= endPos; startPos++) {
                     String gram = src.substring(startPos, startPos + candidateGramLen);
-                    //System.err.println("dstLen " + dstLen + " gramNo " + gramNo + " gram " + gram);
                     ArrayList<Integer> invertedList = mGlobalIndex.get(dstLen).get(gramNo).get(gram);
                     if (invertedList != null) {
                         for (int k = 0; k < invertedList.size(); k++) {
@@ -260,14 +254,12 @@ public class EditDistanceJoiner {
     }
     private int filterCandidate(String src, String dst, int srcMatchPos, int dstMatchPos, int len,
         int[][] distanceBuffer){
-        //System.err.println(src + " : " + dst + " : " + src.substring(srcMatchPos, srcMatchPos + len));
         int srcRightLen = src.length() - srcMatchPos - len;
         int dstRightLen = dst.length() - dstMatchPos - len;
         int leftThreshold = mThreshold - Math.abs(srcRightLen - dstRightLen);
         int leftDistance = calculateEditDistanceWithThreshold(src, 0, srcMatchPos,
             dst, 0, dstMatchPos, 
             leftThreshold, distanceBuffer);
-        _left_cnt.getAndIncrement();
         if (leftDistance > leftThreshold) {
             return -1;
         }
@@ -276,7 +268,6 @@ public class EditDistanceJoiner {
             src, srcMatchPos + len, src.length() - srcMatchPos - len, 
             dst, dstMatchPos + len, dst.length() - dstMatchPos - len,
             rightThreshold, distanceBuffer);
-        _right_cnt.getAndIncrement();
         if (rightDistance > rightThreshold) {
             return -1;
         }
